@@ -133,12 +133,10 @@ data = data[data["plays"] != 0]
 data["user_id"] = data["user"].astype("category").cat.codes
 data["artist_id"] = data["artist"].astype("category").cat.codes
 
-artist_id_name_d = {}
-artist_name_id_d = {}
-for index, row in data.iterrows():
-    artist_id, artist_name = row["artist_id"], row["artist"]
-    artist_id_name_d[str(artist_id)] = artist_name
-    artist_name_id_d[artist_name] = str(artist_id)
+item_id_name_lookup = data[["artist_id", "artist"]].drop_duplicates()
+item_id_name_lookup["artist_id"] = item_id_name_lookup["artist_id"].astype(str)
+
+data = data.drop(["user", "artist"], axis=1)
 
 users_set = list(np.sort(data["user_id"].unique()))
 artists_set = list(np.sort(data["artist_id"].unique()))
@@ -170,20 +168,22 @@ if args.implicit:
 sim_result = []
 for artist_id in popular_artists_id:
     each_artist = {}
-    each_artist["object"] = artist_id_name_d[str(artist_id)]
+    each_artist["object"] = item_id_name_lookup.loc[item_id_name_lookup["artist_id"] == str(artist_id)]["artist"].iloc[0]
     each_artist["similarities"] = []
 
     artist_vec = artist_hiddens[artist_id]
 
-    similarites = artist_hiddens.dot(artist_vec.reshape((-1, 1)))
+    norms = np.sqrt(np.sum(artist_hiddens * artist_hiddens, axis=1))
+    similarities = artist_hiddens.dot(artist_vec) * 1.0 / norms
     similarites = similarites.reshape(-1)
     sorted_idxes = np.argsort(similarites)[::-1][:10]
+    
     for i, idx in enumerate(sorted_idxes):
         each_artist["similarites"].append(
             {
                 "rank": i + 1,
-                "artist": artist_id_name_d[str(idx)],
-                "score": similarites[idx]
+                "artist": item_id_name_lookup.loc[item_id_name_lookup["artist_id"] == str(idx)]["artist"].iloc[0],
+                "score": "%.5f" % similarites[idx]
             }
         )
     sim_result.append(each_artist)
